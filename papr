@@ -1,9 +1,9 @@
 #!/bin/sh
 #
-# papr - Background scaling tool
+# papr - Background setting tool
 #
 # Fits the background image as best as possible
-# (just like the gnome "zoom" option)
+# (just like the gnome wallpaper "zoom" option)
 #
 # Required for operation: ImageMagic, xrandr
 # 
@@ -11,7 +11,27 @@
 #
 # published under the terms of the Beerware license
 #
+# Usage: papr image [gravity]
+# or papr -reload
+#
 #set -x
+
+# Checks for required tools
+which convert 2>&1 1>/dev/null
+if [ $? -ne 0 ] 
+then
+	echo "Please install ImageMagick."
+	exit 1
+fi
+
+which xrandr 2>&1 1>/dev/null
+if [ $? -ne 0 ] 
+then
+	echo "Please install xrandr."
+	exit 1
+fi
+
+# We do need a file to operate on (or -reload)
 if [ -z "$1" ]
 then
 	echo "Need a filename. Usage as follows:"
@@ -28,12 +48,14 @@ then
 	
 fi
 
+# Creating the .papr directory so we can store the current wallpaper
 if [ ! -d $HOME/.papr ]
 then
 	mkdir $HOME/.papr
 	echo "$HOME/.papr created. I won't do this again."
 fi
 
+# reset the wallpaper, e.g. on window manager startup
 if [ "$1" = '-reload' ]
 then
 	if [ -f "$HOME/.papr/wallpaper" ]
@@ -52,7 +74,11 @@ if [ ! -f "$IMG" ]
 then
 	echo "No such file."
 fi
+
+# default gravity
 GRAV=center
+
+# is there a gravity specified?
 if [ ! -z "$2" ]
 then
 	gravity=$2
@@ -73,13 +99,16 @@ then
 	GRAV=$gravity
 fi
 
-
+# current screen resolution
 CURRES=$(xrandr --prop | grep " connected" | awk '{ print $3 }' | tr "+x" " " | awk '{ print $1 " " $2 }')
-
+# split up in height and width
 SCRW=$( echo $CURRES | awk '{ print $1 }' )
 SCRH=$( echo $CURRES | awk '{ print $2 }' )
+
+# screen ratio
 SCRRATIO=$( echo "scale=4 ; $SCRW/$SCRH" | bc )
 
+# image size, width, height, ratio...
 IMGSIZE=$(identify -format "%wx%h" "$IMG" | tr "x" " ")
 
 IMGW=$( echo $IMGSIZE | awk '{ print $1 }' )
@@ -88,12 +117,13 @@ IMGRATIO=$( echo "scale=4 ; $IMGW/$IMGH" | bc )
 
 if [ $( echo "$IMGRATIO <= $SCRRATIO" | bc) -eq 1 ] 
 then
-	# our picture is 'higher' than the screen, so resize to width an cut the rest later
+	# our picture is 'higher' than the screen, so resize to width and cut the rest later
 	SCALE="$(echo $SCRW)x"
 	
 else
 	SCALE="x$(echo $SCRH)"
 fi
 
+# beware of magick below
 convert "$IMG" -resize $(echo $SCALE) -gravity $GRAV -extent $(echo $SCRW)x$(echo $SCRH) "$HOME/.papr/wallpaper"
 display -window root "$HOME/.papr/wallpaper"
