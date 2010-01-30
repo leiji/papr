@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# papr - Background scaling tool
+#
+# Fits the background image as best as possible
+# (just like the gnome "zoom" option)
+#
+# Required for operation: ImageMagic, xrandr
+# 
+# Author: Alexander Kahl < alex akahl.net > Jan 2010
+#
+# published under the terms of the Beerware license
+#
+#set -x
+if [ -z "$1" ]
+then
+	echo "Need a filename. Usage as follows:"
+	echo
+	echo "$( basename $0 ) file [gravity]"
+	echo
+	echo "For help on the gravity see man convert. Default is center."
+	echo
+	echo "Or reload the wallpaper set by papr"
+	echo
+	echo "$( basename $0 ) -reload"
+	echo
+	exit 1
+	
+fi
+
+if [ ! -d $HOME/.papr ]
+then
+	mkdir $HOME/.papr
+	echo "$HOME/.papr created. I won't do this again."
+fi
+
+if [ "$1" = '-reload' ]
+then
+	if [ -f "$HOME/.papr/wallpaper" ]
+	then
+		display -window root "$HOME/.papr/wallpaper"
+		exit 0
+	else
+		echo "Can't open the wallpaper. You have to set a wallpaper first."
+		exit 1
+	fi
+fi
+
+IMG=$1
+
+if [ ! -f "$IMG" ]
+then
+	echo "No such file."
+fi
+GRAV=center
+if [ ! -z "$2" ]
+then
+	gravity=$2
+	isgrav="no"
+	for g in $( convert -list gravity )
+	do
+		if [ $( echo $g | tr '[:upper:]' '[:lower:]' )  =  $( echo $gravity | tr '[:upper:]' '[:lower:]'  ) ]
+		then
+			isgrav="yes"
+		fi
+	done
+	if [ $isgrav = "no" ]
+	then
+		echo "If you specify a gravity, please select one of those provided by convert -list gravity:"
+		convert -list gravity
+		exit 1
+	fi
+	GRAV=$gravity
+fi
+
+
+CURRES=$(xrandr --prop | grep " connected" | awk '{ print $3 }' | tr "+x" " " | awk '{ print $1 " " $2 }')
+
+SCRW=$( echo $CURRES | awk '{ print $1 }' )
+SCRH=$( echo $CURRES | awk '{ print $2 }' )
+SCRRATIO=$( echo "scale=4 ; $SCRW/$SCRH" | bc )
+
+IMGSIZE=$(identify -format "%wx%h" "$IMG" | tr "x" " ")
+
+IMGW=$( echo $IMGSIZE | awk '{ print $1 }' )
+IMGH=$( echo $IMGSIZE | awk '{ print $2 }' )
+IMGRATIO=$( echo "scale=4 ; $IMGW/$IMGH" | bc )
+
+if [ $( echo "$IMGRATIO <= $SCRRATIO" | bc) -eq 1 ] 
+then
+	# our picture is 'higher' than the screen, so resize to width an cut the rest later
+	SCALE="$(echo $SCRW)x"
+	
+else
+	SCALE="x$(echo $SCRH)"
+fi
+
+convert "$IMG" -resize $(echo $SCALE) -gravity $GRAV -extent $(echo $SCRW)x$(echo $SCRH) "$HOME/.papr/wallpaper"
+display -window root "$HOME/.papr/wallpaper"
